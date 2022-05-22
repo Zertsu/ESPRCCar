@@ -8,17 +8,19 @@
 	<link rel="icon" href="/favicon.webp" type="image/webp">
 	<link rel='stylesheet' type='text/css' media='screen' href='main.css'>
 	<script>
-		var sendBuff = new Uint8Array(3)
+		var sendBuff = new Uint8Array(4)
+		var websocket
 		var acl
 		var oel
 		const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
 		function acc2mot(a, o) {
 			var lm = clamp(Math.round((-a.y-a.x) * 25), -255, 255)
 			var rm = clamp(Math.round((-a.y+a.x) * 25), -255, 255)
-			o[2] |= ((lm < 0) ? 1 : 0) << 0
-			o[2] |= ((rm < 0) ? 1 : 0) << 1
-			o[0] = Math.abs(lm)
-			o[1] = Math.abs(rm)
+			o[3] |= ((lm < 0) ? 1 : 0) << 0
+			o[3] |= ((rm < 0) ? 1 : 0) << 1
+			o[1] = Math.abs(lm)
+			o[2] = Math.abs(rm)
+			o[0] = 2
 		}
 		function sendData() {
 			sendBuff.fill(0)
@@ -28,7 +30,7 @@
 		}
 		function startup() {
 			oel = document.getElementsByTagName("button")[0]
-			websocket = new WebSocket(`ws://${window.location.host}/ws`);
+			websocket = new WebSocket(`${(window.location.protocol == "https:" ? "wss" : "ws")}://${window.location.host}/ws`);
 			acl = new Accelerometer({frequency: 15});
 			acl.addEventListener('reading', () => {
 				sendData(acl)
@@ -37,6 +39,7 @@
 		function toggle() {
 			if(acl.activated) {
 				acl.stop()
+				websocket.send(Uint8Array.from([2,0,0,0]))
 				oel.innerText = "Start"
 			} else {
 				acl.start()

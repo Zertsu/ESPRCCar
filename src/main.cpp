@@ -3,6 +3,8 @@
 #include <WiFiUdp.h>
 #include <LittleFS.h>
 #include "debug.h"
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
 
 class digitalMotor
 {
@@ -47,7 +49,7 @@ class analogMotor : public digitalMotor
 public:
   void set(int speed, bool direction)
   {
-    if (direction)
+    if (!direction)
     {
       analogWrite(pin1, speed);
       digitalWrite(pin2, 0);
@@ -69,8 +71,7 @@ private:
   bool serverConnected;
   IPAddress serverIP;
   uint16_t serverPort;
-  void (*controlCallback)(const uint8_t *);
-  void (*timeoutCallback)();
+  int (*controlCallback)(const uint8_t *, int, uint8_t*);
   unsigned long timeoutAt;
   bool timeouted = false;
 
@@ -88,6 +89,21 @@ private:
       delay(100);
     }
     return 0;
+  }
+  
+  int connectToServer() {
+    sendTo("\0", 1, serverIP, serverPort);
+    DPRINTF("Connecting to: %s:%d ... ", serverIP.toString().c_str(), serverPort);
+    int res = parsePacketSync(5000);
+    if (res > 0)
+    {
+      DPRINTLN("Succes!");
+      serverConnected = true;
+      return 0;
+    }
+    DPRINTLN("Fail!");
+    serverConnected = false;
+    return 1;
   }
 
 public:
@@ -116,24 +132,12 @@ public:
   {
     serverIP = ip;
     serverPort = port;
-    sendTo("\0", 1, serverIP, serverPort);
-    DPRINTF("Connecting to: %s:%d ... ", ip.toString().c_str(), port);
-    int res = parsePacketSync(5000);
-    if (res > 0)
-    {
-      DPRINTLN("Succes!");
-      serverConnected = true;
-      return 0;
-    }
-    DPRINTLN("Fail!");
-    serverConnected = false;
-    return 1;
+    return connectToServer();
   }
-
-  void setCallbacks(void (*con)(const uint8_t *), void (*t)())
+  
+  void setCallback(int (*con)(const uint8_t *, int, uint8_t*))
   {
     controlCallback = con;
-    timeoutCallback = t;
   }
 
   void run()
@@ -142,28 +146,46 @@ public:
     if (packetSize)
     {
       int len = read(incomingPacket, 255);
-      incomingPacket[10] = 0;
-      timeoutAt = millis() + 1500;
+      timeoutAt = millis() + 5000;
       timeouted = false;
-      switch (incomingPacket[0])
+      int slen = controlCallback(incomingPacket, len, sendBuffer);
+      if(slen)
       {
-      case 0:
-        memcpy(sendBuffer, incomingPacket, len);
-        sendBuffer[0] = 1;
-        sendReply(sendBuffer, len);
-        break;
-
-      case 2:
-        controlCallback(incomingPacket);
-        break;
-
-      default:
-        break;
+        sendReply(sendBuffer, slen);
       }
     }
     else if (timeoutAt < millis() && !timeouted)
     {
       timeouted = true;
+    }
+  }
+};
+
+class timeoutHan
+{
+private:
+  unsigned long timeoutAt;
+  unsigned long delayTime;
+  bool isTimedOut = true;
+  void (*timeoutCallback)();
+public:
+  timeoutHan(unsigned long timeout) {
+    delayTime = timeout;
+  }
+
+  void setCallback(void (*callback)())
+  {
+    timeoutCallback = callback;
+  }
+
+  void feed() {
+    isTimedOut = false;
+    timeoutAt = millis() + delayTime;
+  }
+
+  void run() {
+    if (millis() > timeoutAt && !isTimedOut)
+    {
       timeoutCallback();
     }
   }
@@ -173,6 +195,9 @@ analogMotor LeftM;
 analogMotor RightM;
 digitalMotor TurnM;
 myUDP Udp;
+AsyncWebServer http_ser(80);
+AsyncWebSocket ws("/ws");
+timeoutHan MotorHan(1500);
 
 int waitForWiFi(wl_status_t target, unsigned long timeout = 5000)
 {
@@ -267,12 +292,53 @@ int connectToServer()
   return Udp.setServer(target, port);
 }
 
-void handleControlPacket(const uint8_t *str)
+int packetHandler(const uint8_t *p, int len, uint8_t *r)
 {
-  // DPRINTF("%x %x %x\n", str[1], str[2], str[3]);
-  LeftM.set(str[1], str[3] & 1 << 0);
-  RightM.set(str[2], str[3] & 1 << 1);
-  TurnM.set(str[3] & 1 << 3, str[3] & 1 << 2);
+  switch (p[0])
+  {
+  case 0:
+    memcpy(r, p, len);
+    r[0] = 1;
+    return len;
+
+  case 2:
+    DPRINTF("%x %x %x\n", p[1], p[2], p[3]);
+    LeftM.set(p[1], p[3] & 1 << 0);
+    RightM.set(p[2], p[3] & 1 << 1);
+    TurnM.set(p[3] & 1 << 3, p[3] & 1 << 2);
+    MotorHan.feed();
+    return 0;
+
+  default:
+    return 0;
+  }
+}
+
+void websockEvntHan(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
+             void *arg, uint8_t *data, size_t len) {
+    AwsFrameInfo *info = (AwsFrameInfo*)arg;
+    switch (type) {
+      case WS_EVT_CONNECT:
+        DPRINTF("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+        break;
+      case WS_EVT_DISCONNECT:
+        DPRINTF("WebSocket client #%u disconnected\n", client->id());
+        break;
+      case WS_EVT_DATA:
+        if (info->final && info->index == 0 && info->len == len && info->opcode == WS_BINARY) {
+          uint8_t *sendB = new uint8_t[256];
+          int rlen = packetHandler(data, len, sendB);
+          if (rlen)
+          {
+            client->binary(sendB, rlen);
+          }
+          delete sendB;
+        }
+        break;
+      case WS_EVT_PONG:
+      case WS_EVT_ERROR:
+        break;
+  }
 }
 
 void stopMotors()
@@ -292,21 +358,25 @@ void setup()
   LeftM.attach(4, 14);   // D2 D5
   RightM.attach(12, 15); // D6 D8
   TurnM.attach(13, 5);   // D7 D1
-  pinMode(LED_BUILTIN, OUTPUT);
   Udp.begin(5556);
   LittleFS.begin();
+  ws.onEvent(websockEvntHan);
+  http_ser.addHandler(&ws);
+  http_ser.serveStatic("/", LittleFS, "/web/").setDefaultFile("index.html");
+
   if (!networkSetup())
   {
     connectToServer();
   }
-  else
-  {
 
-  }
-  Udp.setCallbacks(handleControlPacket, stopMotors);
+  Udp.setCallback(packetHandler);
+  MotorHan.setCallback(stopMotors);
+  http_ser.begin();
 }
 
 void loop()
 {
   Udp.run();
+  ws.cleanupClients();
+  MotorHan.run();
 }
