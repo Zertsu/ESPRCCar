@@ -2,9 +2,10 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <LittleFS.h>
-#include "debug.h"
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+
+#include "debug.h"
 
 class digitalMotor
 {
