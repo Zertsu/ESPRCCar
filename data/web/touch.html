@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<meta http-equiv='X-UA-Compatible' content='IE=edge'>
+	<title>ESPCar</title>
+	<meta name='viewport' content='width=device-width, initial-scale=1'>
+	<style>
+		body {
+			margin: 0;
+			width: 100vw;
+			height: 100vh;
+			overflow: hidden;
+			background-color: black;
+			display: flex;
+			flex-direction: row;
+			flex-wrap: nowrap;
+			justify-content: space-between;
+			align-items: center;
+		}
+		div {
+			display: grid;
+			grid-template-columns: 5fr 1fr 5fr;
+			grid-template-rows: 1fr;
+			grid-template-areas: ". f .";
+			width: 6cm;
+			height: 2cm;
+		}
+		div > *:first-child {
+			grid-area: f;
+		}
+		input {
+			height: 15mm;
+			width: 35mm;
+			margin: 5mm;
+			appearance: none;
+			background: gray;
+			border-radius: 10mm;
+			outline: none;
+			overflow: hidden;
+		}
+		input::-webkit-slider-thumb {
+			appearance: none;
+			width: 5px;
+			height: 15mm;
+			box-shadow: -100vw 0 0 100vw lightgray;
+		}
+		button {
+			user-select:none;
+			background-color: gray;
+			border-radius: 2mm;
+		}
+		button:active {
+			background-color: #333;
+		}
+		@media screen and (orientation:landscape) {
+			input {
+				transform: rotate(-90deg);
+			}
+		}
+		@media screen and (orientation:portrait) {
+			body {
+				flex-direction: column;
+			}
+			div {
+				transform: rotate(90deg);
+			}
+		}
+	</style>
+	<script>
+		var websocket = new WebSocket(`${(window.location.protocol == "https:" ? "wss" : "ws")}://${window.location.host}/ws`);
+		var o = new Uint8Array(4)
+		var k = {"LS": 0, "RS": 0, "TL": 0, "TR": 0}
+		var h = {"LS": false, "RS": false}
+		var slid
+		function slider_han(e) {
+			k[e.target.id] = e.target.value
+			console.log(e.target.id, e.target.value)
+		}
+		function but_d_han(e) {
+			k[e.target.id] = 1
+		}
+		function but_u_han(e) {
+			k[e.target.id] = 0
+		}
+		function slider_touch(e) {
+			h[e.target.id] = true
+		}
+		function slider_release(e) {
+			h[e.target.id] = false
+		}
+		function init() {
+			slid = document.getElementsByTagName("input")
+			for (const el of slid) {
+				el.addEventListener("input", slider_han)
+				el.addEventListener("touchstart", slider_touch)
+				el.addEventListener("touchend", slider_release)
+				el.addEventListener("mousedown", slider_touch)
+				el.addEventListener("mouseup", slider_release)
+			}
+			btels = document.getElementsByTagName("button")
+			for (let i = 1; i < btels.length; i++) {
+				btels[i].addEventListener("touchstart", but_d_han)
+				btels[i].addEventListener("mousedown", but_d_han)
+				btels[i].addEventListener("touchend", but_u_han)
+				btels[i].addEventListener("mouseup", but_u_han)		   
+			}
+			
+			btels[0].addEventListener("click", () => {
+				if (document.fullscreenElement === null) {
+					document.documentElement.requestFullscreen()
+				} else {
+					document.exitFullscreen()
+				}
+			})
+		}
+		function idleHan(s) {
+			return Math.sign(s) * Math.floor(Math.abs(s) * 0.8)
+		}
+		setInterval(() => {
+			if (!h["LS"]) {
+				var val = idleHan(slid[0].value)
+				slid[0].value = val
+				k["LS"] = val
+			}
+			if (!h["RS"]) {
+				var val = idleHan(slid[1].value)
+				slid[1].value = val
+				k["RS"] = val
+			}
+			o.fill(0)
+			o[0] = 2
+			o[3] |= ((k["LS"] < 0) ? 1 : 0) << 0
+			o[3] |= ((k["RS"] < 0) ? 1 : 0) << 1
+			o[1] = Math.abs(k["LS"])
+			o[2] = Math.abs(k["RS"])
+			var R = k["TR"] - k["TL"]
+			if (R !== 0) {
+				o[3] |= 1 << 3
+				if (R < 0) {
+					o[3] |= 1 << 2
+				}
+			}
+			websocket.send(o)
+		}, 70);
+		document.addEventListener("DOMContentLoaded", init);
+	</script>
+</head>
+<body>
+	<input id="LS" type="range" min="-255" max="255" value="0">
+	<div>
+		<button>Full Screen</button>
+		<button id="TL">RL</button>
+		<button id="TR">RR</button>
+	</div>
+	<input id="RS" type="range" min="-255" max="255" value="0">
+</body>
+</html>
