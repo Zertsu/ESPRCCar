@@ -320,13 +320,15 @@ void websockEvntHan(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEve
     AwsFrameInfo *info = (AwsFrameInfo*)arg;
     switch (type) {
       case WS_EVT_CONNECT:
-        DPRINTF("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+        DPRINTF("WebSocket client #%u connected from %s\n", 
+          client->id(), client->remoteIP().toString().c_str());
         break;
       case WS_EVT_DISCONNECT:
         DPRINTF("WebSocket client #%u disconnected\n", client->id());
         break;
       case WS_EVT_DATA:
-        if (info->final && info->index == 0 && info->len == len && info->opcode == WS_BINARY) {
+        if (info->final && info->index == 0 &&
+            info->len == len && info->opcode == WS_BINARY) {
           uint8_t *sendB = new uint8_t[256];
           int rlen = packetHandler(data, len, sendB);
           if (rlen)

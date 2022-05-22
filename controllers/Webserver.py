@@ -6,19 +6,16 @@ import queue
 from threading import Thread
 
 
-
-
-
 class UDPhan():
     def __init__(self, bind_addr, port) -> None:
-        self.socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind((bind_addr, port))
         self.socket.settimeout(5)
         self.remote = ("0.0.0.0", 1)
         self.sendQ = queue.Queue()
-        self.recvT = Thread(target = self._udp_reciver)
+        self.recvT = Thread(target=self._udp_reciver)
         self.recvT.daemon = True
-        self.sendT = Thread(target = self._udp_sender)
+        self.sendT = Thread(target=self._udp_sender)
         self.sendT.daemon = True
         self.recvT.start()
         self.sendT.start()
@@ -35,7 +32,7 @@ class UDPhan():
                 if not self.remote[0] == "0.0.0.0":
                     print("No packet from udp")
                     self.sendQ.put(b'\x00')
-    
+
     def _udp_sender(self):
         while True:
             data = self.sendQ.get()
@@ -55,14 +52,14 @@ class Webhan():
             web.static("/", "./data/web/"),
         ])
 
-    def run(self, host = "0.0.0.0", port = 8080, certfile = None, keyfile = None):
+    def run(self, host="0.0.0.0", port=8080, certfile=None, keyfile=None):
         if not certfile == None and not keyfile == None:
             ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
             ssl_context.load_cert_chain(certfile, keyfile)
-            web.run_app(self.app, ssl_context=ssl_context, host=host, port=port)
+            web.run_app(self.app, ssl_context=ssl_context,
+                        host=host, port=port)
         else:
             web.run_app(self.app, host=host, port=port)
-            
 
     async def websocket_handler(self, request):
         ws = web.WebSocketResponse()
@@ -74,7 +71,7 @@ class Webhan():
                 self.targetQ.put(msg.data)
             elif msg.type == aiohttp.WSMsgType.ERROR:
                 print('ws connection closed with exception %s'.format(ws.exception()))
-        
+
         if ws in self.clients:
             self.clients.remove(ws)
         print("WS Client disconnected: {}".format(request.remote))

@@ -1,43 +1,43 @@
 <!DOCTYPE html>
 <html>
-	<head>
-		<meta charset='utf-8'>
-		<meta http-equiv='X-UA-Compatible' content='IE=edge'>
-		<title>ESPCar</title>
-		<meta name='viewport' content='width=device-width, initial-scale=1'>
-		<link rel="icon" href="/favicon.webp" type="image/webp">
-		<link rel='stylesheet' type='text/css' media='screen' href='main.css'>
-		<script>
-			function disableacc() {
-				console.log("No accel")
-				var e = document.getElementsByTagName("a")[0]
-				e.removeAttribute("href")
-				e.innerText = "Accelerometer not avalible"
-				e.style.backgroundColor = "#550000"
-				e.style.color = "#AAAAAA"
+<head>
+	<meta charset='utf-8'>
+	<meta http-equiv='X-UA-Compatible' content='IE=edge'>
+	<title>ESPCar</title>
+	<meta name='viewport' content='width=device-width, initial-scale=1'>
+	<link rel="icon" href="/favicon.webp" type="image/webp">
+	<link rel='stylesheet' type='text/css' media='screen' href='main.css'>
+	<script>
+		function disableacc() {
+			console.log("No accel")
+			var e = document.getElementsByTagName("a")[0]
+			e.removeAttribute("href")
+			e.innerText = "Accelerometer not avalible"
+			e.style.backgroundColor = "#550000"
+			e.style.color = "#AAAAAA"
+		}
+		function testAccel() {
+			if (typeof Accelerometer === 'undefined') {
+				disableacc()
+				return
 			}
-			function testAccel() {
-				if (typeof Accelerometer === 'undefined') {
-					disableacc()
-					return
-				}
-				var acl = new Accelerometer({frequency: 60});
-				tc = setTimeout(() => {
-					disableacc()
+			var acl = new Accelerometer({frequency: 60});
+			tc = setTimeout(() => {
+				disableacc()
+				acl.stop()
+			}, 300)
+			acl.addEventListener('reading', () => {
+				console.log(acl)
+				if (acl.x != null) {
+					clearTimeout(tc)
 					acl.stop()
-				}, 300)
-				acl.addEventListener('reading', () => {
-					console.log(acl)
-					if (acl.x != null) {
-						clearTimeout(tc)
-						acl.stop()
-					}
-				})
-				acl.start()
-			}
-			document.addEventListener("DOMContentLoaded", testAccel);
-		</script>
-	</head>
+				}
+			})
+			acl.start()
+		}
+		document.addEventListener("DOMContentLoaded", testAccel);
+	</script>
+</head>
 <body>
 	<a href="accel.html">Accleration control</a>
 	<a href="kb.html">Keybaord</a>
