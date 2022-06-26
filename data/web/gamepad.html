@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<meta http-equiv='X-UA-Compatible' content='IE=edge'>
+	<title>ESPCar</title>
+	<meta name='viewport' content='width=device-width, initial-scale=1'>
+    <link rel="icon" href="/favicon.webp" type="image/webp">
+	<link rel='stylesheet' type='text/css' media='screen' href='main.css'>
+	<script>
+		const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+		websocket = new WebSocket(`${(window.location.protocol == "https:" ? "wss" : "ws")}://${window.location.host}/ws`);
+		var o = new Uint8Array(4)
+		var gamepad_n = 0;
+		var intervalID = -1;
+		var outEl;
+
+		function handle() {
+			c = navigator.getGamepads()[0]
+			if (c == null) {return}
+			var LB = c.buttons[4].value
+			var RB = c.buttons[5].value
+			var LT = c.buttons[6].value
+			var RT = c.buttons[7].value
+			var X  = c.axes[0]
+			var LM = Math.round(255 * (RT - LT) + X * 255)
+			var RM = Math.round(255 * (RT - LT) - X * 255)
+			var SM = Math.round(LB - RB)
+			o.fill(0);
+			o[0] = 2
+			o[1] = Math.min(Math.abs(LM), 255)
+			o[2] = Math.min(Math.abs(RM), 255)
+			if (LM < 0) {o[3] |= 1}
+			if (RM < 0) {o[3] |= 1 << 1}
+			if (SM != 0) {
+				o[3] |= 1 << 3
+				if (SM < 0) {o[3] |= 1 << 2}
+			}
+			websocket.send(o)
+		}
+
+		document.addEventListener("DOMContentLoaded", () => {
+			outEl = document.getElementById("out")
+			window.addEventListener("gamepadconnected", (e) => {
+				gamepad_n++
+				if (intervalID == -1) {
+					intervalID = setInterval(handle, 70)
+					outEl.innerText = `Using ${navigator.getGamepads()[0].id}`
+				}
+			});
+			window.addEventListener("gamepaddisconnected", (e) => {
+				gamepad_n--
+				if (gamepad_n == 0) {
+					clearInterval(intervalID)
+					intervalID = -1
+					outEl.innerText = "Press any button on a connected gamepad"
+				}
+			});
+		});
+	</script>
+</head>
+<body>
+	<div id="out" style="width:70%;">Press any button on a connected gamepad</div>
+</body>
+</html>
