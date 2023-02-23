@@ -230,7 +230,7 @@ int networkSetup()
     Serial.printf("%d network(s) found\n", nnetworks);
     for (int i = 0; i < nnetworks; i++)
     {
-      Serial.printf("%d: %s, Ch:%d (%ddBm) %s\n",
+      Serial.printf("%d: \"%s\", Ch:%d (%ddBm) %s\n",
                     i + 1,
                     WiFi.SSID(i).c_str(),
                     WiFi.channel(i),
@@ -240,22 +240,26 @@ int networkSetup()
 
 #endif // DEBUG
 
-    int end;
+    int end, passlen;
     char SSID_buf[33];
     char pass[64];
     while (wifilist.position() + 1 < wifilist.size())
     {
       end = wifilist.readBytesUntil(',', SSID_buf, 32);
       SSID_buf[end] = 0;
-      end = wifilist.readBytesUntil('\n', pass, 63);
-      pass[end] = 0;
+      passlen = wifilist.readBytesUntil('\n', pass, 63);
+      pass[passlen] = 0;
       for (int i = 0; i < nnetworks; i++)
       {
         if (strcmp(WiFi.SSID(i).c_str(), SSID_buf) == 0)
         {
-          DPRINT("Connecting to: ");
-          DPRINTLN(SSID_buf);
-          WiFi.begin(SSID_buf, pass);
+          DPRINTF("Connecting to: \"%s\"\n", SSID_buf);
+          if (passlen)
+          {
+            WiFi.begin(SSID_buf, pass);            
+          } else {
+            WiFi.begin(SSID_buf);
+          }
           if (!waitForWiFi(WL_CONNECTED, 15000))
           {
             DPRINTLN("Connected!");
